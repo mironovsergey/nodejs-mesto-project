@@ -25,6 +25,7 @@
 ## Переменные окружения `.env`
 
 ```
+JWT_SECRET=
 MONGO_URI=mongodb://localhost:27017/mestodb
 PORT=3000
 ```

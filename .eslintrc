@@ -38,6 +38,12 @@
               "ts": "never"
           }
       ],
+      "no-unused-vars": [
+          "warn",
+          {
+              "argsIgnorePattern": "^_"
+          }
+      ],
       "no-underscore-dangle": [
         "error",
         {

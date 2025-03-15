@@ -1,12 +1,16 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import mongoose, { Types } from 'mongoose';
-import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import { errors } from 'celebrate';
+import { validateSignin, validateSignup } from './middlewares/validations';
+import auth from './middlewares/auth';
+import { requestLogger, errorLogger } from './middlewares/logger';
 import userRoutes from './routes/users';
 import cardRoutes from './routes/cards';
-import HTTP_STATUS from './constants/http';
-
-dotenv.config();
+import { HTTP_STATUS } from './constants';
+import { login, createUser } from './controllers/users';
+import { HttpError, NotFoundError } from './errors';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/mestodb';
 const PORT = process.env.PORT || 3000;
@@ -26,16 +30,31 @@ mongoose.connect(MONGO_URI);
 app.use(limiter);
 app.use(express.json());
 
-app.use((req: Request, res: Response, next: NextFunction) => {
-  req.user = { _id: new Types.ObjectId('67cea8a5d630c27092bacedf') };
-  next();
+app.use(requestLogger);
+
+app.post('/signin', validateSignin, login);
+app.post('/signup', validateSignup, createUser);
+app.use('/users', auth, userRoutes);
+app.use('/cards', auth, cardRoutes);
+
+app.use('*', (req: Request, res: Response, next: NextFunction) => {
+  next(new NotFoundError('Запрашиваемый ресурс не найден'));
 });
 
-app.use('/users', userRoutes);
-app.use('/cards', cardRoutes);
+app.use(errorLogger);
 
-app.use((req: Request, res: Response) => {
-  res.status(HTTP_STATUS.NOT_FOUND).send({ message: 'Запрашиваемый ресурс не найден' });
+app.use(errors());
+
+app.use((err: HttpError, req: Request, res: Response, _next: NextFunction) => {
+  const { statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR, message } = err;
+
+  res
+    .status(statusCode)
+    .send({
+      message: statusCode === HTTP_STATUS.INTERNAL_SERVER_ERROR
+        ? 'Ошибка сервера'
+        : message,
+    });
 });
 
 app.listen(PORT);

@@ -1,57 +1,77 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { Error as MongooseError } from 'mongoose';
+import jwt from 'jsonwebtoken';
 import User, { IUser } from '../models/user';
-import HTTP_STATUS from '../constants/http';
+import { HTTP_STATUS } from '../constants';
+import {
+  NotFoundError, BadRequestError, ConflictError, UnauthorizedError,
+} from '../errors';
+
+const { JWT_SECRET } = process.env;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET не определен.');
+}
 
 // Возвращает всех пользователей
 export const getUsers = (
   req: Request,
   res: Response,
+  next: NextFunction,
 ) => {
   User.find()
     .then((users: IUser[]) => {
       res.status(HTTP_STATUS.OK).send(users);
     })
-    .catch(() => {
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({ message: 'Ошибка поиска пользователей' });
-    });
+    .catch(next);
 };
 
-// Возвращает пользователя по идентификатору
+// Возвращает текущего пользователя
 export const getUser = (
-  req: Request<{ userId: string }>,
+  req: Request,
   res: Response,
+  next: NextFunction,
 ) => {
-  const { userId } = req.params;
+  const userId = req.user?._id;
 
   User.findById(userId)
-    .then((user: IUser | null) => {
-      if (user) {
-        res.status(HTTP_STATUS.OK).send(user);
-      } else {
-        res.status(HTTP_STATUS.NOT_FOUND).send({ message: 'Пользователь не найден' });
+    .then((user) => {
+      if (!user) {
+        throw new NotFoundError('Пользователь не найден');
       }
+
+      res.status(HTTP_STATUS.OK).send(user);
     })
-    .catch(() => {
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({ message: 'Ошибка поиска пользователя' });
-    });
+    .catch(next);
 };
 
 // Создает пользователя
 export const createUser = (
   req: Request<{}, {}, IUser>,
   res: Response,
+  next: NextFunction,
 ) => {
-  const { name, about, avatar } = req.body;
+  const {
+    name, about, avatar, email, password,
+  } = req.body;
 
-  User.create({ name, about, avatar })
+  User.create({
+    name, about, avatar, email, password,
+  })
     .then((user: IUser) => {
       res.status(HTTP_STATUS.CREATED).send(user);
     })
     .catch((error) => {
       if (error.name === 'ValidationError') {
-        res.status(HTTP_STATUS.BAD_REQUEST).send({ message: 'Некорректные данные пользователя' });
+        const errorMessages = Object.values<MongooseError.ValidatorError>(error.errors)
+          .map(({ message }) => message)
+          .join(' ');
+
+        next(new BadRequestError(errorMessages));
+      } else if (error.code === 11000) {
+        next(new ConflictError('Email уже используется'));
       } else {
-        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({ message: 'Ошибка создания пользователя' });
+        next(error);
       }
     });
 };
@@ -60,23 +80,24 @@ export const createUser = (
 export const updateUser = (
   req: Request<{}, {}, { name: string; about: string }>,
   res: Response,
+  next: NextFunction,
 ) => {
   const { name, about } = req.body;
   const userId = req.user?._id;
 
   User.findByIdAndUpdate(userId, { name, about }, { new: true, runValidators: true })
     .then((user: IUser | null) => {
-      if (user) {
-        res.status(HTTP_STATUS.OK).send(user);
-      } else {
-        res.status(HTTP_STATUS.NOT_FOUND).send({ message: 'Пользователь не найден' });
+      if (!user) {
+        throw new NotFoundError('Пользователь не найден');
       }
+
+      res.status(HTTP_STATUS.OK).send(user);
     })
     .catch((error) => {
       if (error.name === 'ValidationError') {
-        res.status(HTTP_STATUS.BAD_REQUEST).send({ message: 'Некорректные данные пользователя' });
+        next(new BadRequestError('Некорректные данные пользователя'));
       } else {
-        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({ message: 'Ошибка обновления профиля' });
+        next(error);
       }
     });
 };
@@ -85,23 +106,43 @@ export const updateUser = (
 export const updateAvatar = (
   req: Request<{}, {}, { avatar: string }>,
   res: Response,
+  next: NextFunction,
 ) => {
   const { avatar } = req.body;
   const userId = req.user?._id;
 
   User.findByIdAndUpdate(userId, { avatar }, { new: true, runValidators: true })
     .then((user: IUser | null) => {
-      if (user) {
-        res.status(HTTP_STATUS.OK).send(user);
-      } else {
-        res.status(HTTP_STATUS.NOT_FOUND).send({ message: 'Пользователь не найден' });
+      if (!user) {
+        throw new NotFoundError('Пользователь не найден');
       }
+
+      res.status(HTTP_STATUS.OK).send(user);
     })
     .catch((error) => {
       if (error.name === 'ValidationError') {
-        res.status(HTTP_STATUS.BAD_REQUEST).send({ message: 'Некорректая ссылка на аватарку' });
+        next(new BadRequestError('Некорректая ссылка на аватарку'));
       } else {
-        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send({ message: 'Ошибка обновления аватара' });
+        next(error);
       }
+    });
+};
+
+// Аутентификация
+export const login = (
+  req: Request<{}, {}, { email: string; password: string }>,
+  res: Response,
+  next: NextFunction,
+) => {
+  const { email, password } = req.body;
+
+  User.findUserByCredentials(email, password)
+    .then((user) => {
+      const token = jwt.sign({ _id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+
+      res.status(HTTP_STATUS.OK).send({ token });
+    })
+    .catch((error) => {
+      next(new UnauthorizedError(error.message));
     });
 };
