@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Card, { ICard } from '../models/card';
 import { HTTP_STATUS } from '../constants';
-import { NotFoundError, BadRequestError } from '../errors';
+import { NotFoundError, BadRequestError, ForbiddenError } from '../errors';
 
 // Возвращает все карточки
 export const getCards = (
@@ -47,15 +47,28 @@ export const deleteCard = (
   const { cardId } = req.params;
   const owner = req.user?._id;
 
-  Card.findOneAndDelete({ _id: cardId, owner })
+  Card.findById(cardId)
     .then((card: ICard | null) => {
       if (!card) {
         throw new NotFoundError('Карточка не найдена');
       }
 
+      if (!card.owner.equals(owner)) {
+        throw new ForbiddenError('Нет прав для удаления этой карточки');
+      }
+
+      return Card.deleteOne({ _id: cardId });
+    })
+    .then(() => {
       res.status(HTTP_STATUS.OK).send({ message: 'Карточка удалена' });
     })
-    .catch(next);
+    .catch((error) => {
+      if (error.name === 'CastError') {
+        next(new BadRequestError('Некорректный ID карточки'));
+      } else {
+        next(error);
+      }
+    });
 };
 
 // Ставит лайк карточке
@@ -75,7 +88,13 @@ export const likeCard = (
 
       res.status(HTTP_STATUS.OK).send(card);
     })
-    .catch(next);
+    .catch((error) => {
+      if (error.name === 'CastError') {
+        next(new BadRequestError('Некорректный ID карточки'));
+      } else {
+        next(error);
+      }
+    });
 };
 
 // Убирает лайк с карточки
@@ -95,5 +114,11 @@ export const dislikeCard = (
 
       res.status(HTTP_STATUS.OK).send(card);
     })
-    .catch(next);
+    .catch((error) => {
+      if (error.name === 'CastError') {
+        next(new BadRequestError('Некорректный ID карточки'));
+      } else {
+        next(error);
+      }
+    });
 };

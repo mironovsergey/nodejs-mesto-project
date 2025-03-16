@@ -4,6 +4,7 @@ import {
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
 import { SALT_ROUNDS } from '../constants';
+import { UnauthorizedError } from '../errors';
 
 export interface IUser extends Document {
   name: string;
@@ -71,13 +72,13 @@ userSchema.static('findUserByCredentials', async function findUserByCredentials(
   const user = await this.findOne({ email }).select('+password');
 
   if (!user) {
-    throw new Error('Неверная почта или пароль');
+    throw new UnauthorizedError('Неверная почта или пароль');
   }
 
   const matched = await bcrypt.compare(password, user.password);
 
   if (!matched) {
-    throw new Error('Неверная почта или пароль');
+    throw new UnauthorizedError('Неверная почта или пароль');
   }
 
   return user;

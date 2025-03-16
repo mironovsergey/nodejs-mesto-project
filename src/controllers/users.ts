@@ -10,7 +10,7 @@ import {
 const { JWT_SECRET } = process.env;
 
 if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET не определен.');
+  throw new Error('JWT_SECRET не определен');
 }
 
 // Возвращает всех пользователей
@@ -86,11 +86,7 @@ export const updateUser = (
   const userId = req.user?._id;
 
   User.findByIdAndUpdate(userId, { name, about }, { new: true, runValidators: true })
-    .then((user: IUser | null) => {
-      if (!user) {
-        throw new NotFoundError('Пользователь не найден');
-      }
-
+    .then((user) => {
       res.status(HTTP_STATUS.OK).send(user);
     })
     .catch((error) => {
@@ -112,11 +108,7 @@ export const updateAvatar = (
   const userId = req.user?._id;
 
   User.findByIdAndUpdate(userId, { avatar }, { new: true, runValidators: true })
-    .then((user: IUser | null) => {
-      if (!user) {
-        throw new NotFoundError('Пользователь не найден');
-      }
-
+    .then((user) => {
       res.status(HTTP_STATUS.OK).send(user);
     })
     .catch((error) => {
@@ -139,7 +131,6 @@ export const login = (
   User.findUserByCredentials(email, password)
     .then((user) => {
       const token = jwt.sign({ _id: user._id }, JWT_SECRET, { expiresIn: '7d' });
-
       res.status(HTTP_STATUS.OK).send({ token });
     })
     .catch((error) => {
