@@ -3,6 +3,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import { errors } from 'celebrate';
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './config/swagger';
 import { validateSignin, validateSignup } from './middlewares/validations';
 import auth from './middlewares/auth';
 import { requestLogger, errorLogger } from './middlewares/logger';
@@ -31,6 +33,11 @@ app.use(limiter);
 app.use(express.json());
 
 app.use(requestLogger);
+
+app.use('/api', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Mesto API Documentation',
+}));
 
 app.post('/signin', validateSignin, login);
 app.post('/signup', validateSignup, createUser);
