@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import { errors } from 'celebrate';
@@ -18,6 +19,8 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/mestodb';
 const PORT = process.env.PORT || 3000;
 
 const app = express();
+
+app.use(cors());
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
